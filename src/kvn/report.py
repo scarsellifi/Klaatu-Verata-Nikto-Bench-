@@ -34,6 +34,20 @@ def _image_data_uri(path: Path) -> str:
     return f"data:{mime};base64,{b64}"
 
 
+def _copy_asset_alongside(src: Path, out_html: Path) -> str | None:
+    """Copia un asset accanto all'HTML di output; ritorna il path relativo
+    da usare in src=... (None se il file sorgente non esiste).
+
+    Usato per asset grandi (immagini multi-MB) che non conviene embeddare
+    in base64 nella HTML."""
+    if not src.exists():
+        return None
+    target = out_html.parent / src.name
+    if target.resolve() != src.resolve():
+        target.write_bytes(src.read_bytes())
+    return src.name
+
+
 # ---------------------------------------------------------------------------
 # Diff char-level
 # ---------------------------------------------------------------------------
@@ -311,7 +325,12 @@ def compute_executive_summary(models: list[dict]) -> list[str]:
             f"<b>Watch out for {r['model'].split('/')[-1]}:</b> headline score "
             f"{r['agg']['verbatim_rate']:.1f}/100, but "
             f"<b>{r['agg']['silent_rate']:.0f}% of its failures are invisible "
-            f"to a human reviewer</b>."
+            f"to a human reviewer</b> "
+            f"({r['agg']['silent_count']} silent failure"
+            f"{'' if r['agg']['silent_count'] == 1 else 's'} / "
+            f"{r['agg']['fail_count']} total failure"
+            f"{'' if r['agg']['fail_count'] == 1 else 's'} / "
+            f"{r['agg']['total_anchors']} anchors)."
         )
 
     # 4) family pattern, se c'e
@@ -403,7 +422,12 @@ def compute_findings(models: list[dict]) -> list[str]:
             findings.append(
                 f"<b>The silent paradox: {r['model'].split('/')[-1]} looks great until you look closely.</b> "
                 f"Its hard score of {r['agg']['verbatim_rate']:.1f} hides a {sr:.0f}% silent failure rate — "
-                f"the kind of failure a human reviewer would not catch by eye."
+                f"the kind of failure a human reviewer would not catch by eye "
+                f"({r['agg']['silent_count']} silent failure"
+                f"{'' if r['agg']['silent_count'] == 1 else 's'} / "
+                f"{r['agg']['fail_count']} total failure"
+                f"{'' if r['agg']['fail_count'] == 1 else 's'} / "
+                f"{r['agg']['total_anchors']} anchors)."
             )
 
     return findings
@@ -449,7 +473,7 @@ METRICS_SPEC = [
     {"key":"severity", "label":"Severity",        "unit":"",     "higher_better":False, "fmt":"d",   "field":"severity",      "src":"agg",
      "lede":"Weighted failure gravity. Micro-paraphrase = 1, hallucination = 10. Few-but-bad versus many-but-minor."},
     {"key":"silent",   "label":"Silent failure rate", "unit":"%","higher_better":False, "fmt":".0f", "field":"silent_rate",   "src":"agg",
-     "lede":"Share of failures invisible to a human reviewer. <b>The risk metric for unmonitored pipelines.</b>"},
+     "lede":"Share of failures invisible to a human reviewer. Read alongside silent failures / total failures / total anchors. <b>The risk metric for unmonitored pipelines.</b>"},
     {"key":"cost",     "label":"Audit cost",      "unit":"$",    "higher_better":False, "fmt":".3f", "field":"cost_usd",      "src":"meta",
      "lede":"Total spend for one run on this document, with caching enabled where available."},
 ]
@@ -594,6 +618,66 @@ TEMPLATE = """<!doctype html>
                       border: 1px solid var(--rule); }
   .legend-body ul { margin: 4px 0 10px 18px; padding: 0; }
   .legend-body li { margin: 3px 0; break-inside: avoid; }
+  .validity {
+    margin: 22px 0 34px;
+    padding: 20px 24px 22px;
+    background: var(--paper);
+    border: 1px solid var(--rule);
+  }
+  .validity h3 {
+    margin: 0 0 8px;
+    font-family: var(--serif-display);
+    font-size: 26px;
+    font-weight: 600;
+  }
+  .validity p {
+    margin: 0 0 10px;
+    color: var(--ink-soft);
+  }
+  .validity ul { margin: 0 0 0 18px; padding: 0; }
+  .validity li { margin: 4px 0; color: var(--ink-soft); }
+  .validity b { color: var(--ink); }
+  .hypothesis {
+    margin: 22px 0 34px;
+    padding: 24px 28px 26px;
+    background: linear-gradient(180deg, rgba(90,58,38,0.06), rgba(90,58,38,0.02));
+    border: 1px solid var(--rule);
+    border-left: 5px solid var(--accent);
+  }
+  .hypothesis .kicker {
+    margin: 0 0 8px;
+    font-family: var(--mono);
+    font-size: 10px;
+    letter-spacing: 0.22em;
+    text-transform: uppercase;
+    color: var(--ink-faint);
+  }
+  .hypothesis h3 {
+    margin: 0 0 8px;
+    font-family: var(--serif-display);
+    font-size: 30px;
+    font-weight: 600;
+  }
+  .hypothesis p {
+    margin: 0 0 10px;
+    color: var(--ink-soft);
+  }
+  .hypothesis ul { margin: 10px 0 0 18px; padding: 0; }
+  .hypothesis li { margin: 6px 0; color: var(--ink-soft); }
+  .hypothesis b { color: var(--ink); }
+  .hypothesis .note {
+    margin-top: 12px;
+    padding-top: 12px;
+    border-top: 1px dashed var(--rule);
+    font-style: italic;
+  }
+  .hypothesis-image {
+    display: block; margin: 6px auto 18px;
+    max-width: 380px; width: 100%;
+    border: 1px solid var(--ink); padding: 6px;
+    background: var(--paper);
+    box-shadow: 0 1px 0 var(--rule);
+  }
 
   /* ─── Model cards ─── */
   .models-grid {
@@ -1084,7 +1168,8 @@ TEMPLATE = """<!doctype html>
         "few but bad" failures against "many but minor".</li>
         <li><b>Silent rate</b> — the <i>risk</i> metric. Percent of failures
         that a human reviewer would not catch by eye (micro-paraphrase +
-        truncation). <b>High silent rate = dangerous in unmonitored
+        truncation). We report it alongside <b>silent failures / total failures /
+        total anchors</b>. <b>High silent rate = dangerous in unmonitored
         pipelines.</b> A model with 1 fail at 100% silent is more risky in
         production than one with 10 noisy fails.</li>
         <li><b>Depth profile</b> — pass-rate stratified by document depth
@@ -1099,6 +1184,18 @@ TEMPLATE = """<!doctype html>
       taxonomy with examples.</p>
     </div>
   </details>
+
+  <section class="validity">
+    <h3>Threats to validity</h3>
+    <p><b>This is a single-document, fixed-anchor audit.</b> The signal is real, but it is not the last word on literal extraction performance.</p>
+    <ul>
+      <li>Results may vary with document genre and language.</li>
+      <li>Prompt wording, temperature, and decoding settings can change failure profiles.</li>
+      <li>Provider-side routing, hidden system prompts, and context caching can affect runs.</li>
+      <li>Model snapshot drift can move rankings over time.</li>
+      <li>Anchor placement and distribution across the document can amplify or mute depth effects.</li>
+    </ul>
+  </section>
 
   <section class="hero-stats">
     <div class="cell">
@@ -1126,6 +1223,19 @@ TEMPLATE = """<!doctype html>
       Auto-derived from the run, not editorial.</span>
   </div>
   <section id="findings" class="findings"></section>
+
+  <aside class="hypothesis">
+    <div class="kicker">A three-voice interpretive note · not a benchmark conclusion</div>
+    <h3>The bare-hands hypothesis</h3>
+    __HYPOTHESIS_IMAGE__
+    <p><b>One plausible reading of this benchmark is that some models no longer work well bare-handed.</b> KVN removes tools, retrieval, file access, and search, then asks for literal extraction from context alone. On that axis, the panel appears to split between models that still read and copy internally, and models that seem more comfortable when an external scaffold is available.</p>
+    <ul>
+      <li><b>Anthropic is the clearest signal:</b> Sonnet 4.6 and Opus 4.6 both land at 62.5/100. The larger model does not escape the failure profile, which is more consistent with specialization (heavy investment in agentic / tool-use training) than with raw scale limits.</li>
+      <li><b>Gemini Pro looks like the opposite design bet:</b> both Pro variants are flawless on this run, consistent with strong native long-context recall rather than tool-mediated recovery.</li>
+      <li><b>DeepSeek sits in the middle:</b> it is not effortless, but its scaffold appears internal rather than external. It thinks for a long time and still reaches 90.6/100 at very low cost.</li>
+    </ul>
+    <p class="note"><b>Provenance.</b> This is an interpretation, not a finding. It emerged from a conversation between three voices: <b>Marco Scarselli</b> (the human), <b>Claude Opus 4.7</b> (the co-developer of the benchmark and the report), and <b>Codex GPT-5.4</b> (which independently audited a draft of this report and suggested several of the rigor improvements integrated above). All three were also test subjects, or members of the same families as the test subjects. <i>Treat this hypothesis as a triangulation between collaborators, not as a verdict of the data.</i></p>
+  </aside>
 
   <div class="section">
     <span class="num">II.</span>
@@ -1244,7 +1354,7 @@ function renderRankings() {
       <h3>${spec.label} <span class="arrow">${arrow}</span></h3>
       <div class="ld">${spec.lede}</div>
       <ol>${rows}</ol>
-      <div class="median-note">median: ${formatVal(median, spec)}${spec.unit}</div>
+      <div class="median-note">median: ${formatVal(median, spec)}</div>
     </div>`;
   }).join('');
   root.innerHTML = cards;
@@ -1351,7 +1461,7 @@ function renderMaps() {
     <h3>The silent paradox</h3>
     <div class="ld">A high score on the left = high quality AND obvious-when-it-fails.
        A high score on the right = high quality, but its rare failures are invisible.
-       Top-right is the trap.</div>
+       Top-right is the trap. Read the percent together with silent failures / total failures / total anchors.</div>
     ${map2}
   </div>`;
 }
@@ -1448,7 +1558,7 @@ function renderModels() {
       <div class="model-meta">
         <div class="pair"><span class="k">damage</span><span class="v mono">${a.damage.toLocaleString()} chr</span></div>
         <div class="pair"><span class="k">severity</span><span class="v mono">${a.severity}</span></div>
-        <div class="pair"><span class="k">silent</span><span class="v mono">${a.silent_count}/${a.fail_count} ${silentBadge}</span></div>
+        <div class="pair"><span class="k">silent</span><span class="v mono">${a.silent_count}/${a.fail_count}/${a.total_anchors} ${silentBadge}</span></div>
         <div class="pair"><span class="k">cost</span><span class="v mono">$${meta.cost_usd.toFixed(4)}</span></div>
         <div class="pair"><span class="k">latency</span><span class="v mono">${meta.latency_total_s.toFixed(1)}s</span></div>
         <div class="pair"><span class="k">cache R/W</span><span class="v mono">${(meta.cache_reads/1000).toFixed(0)}k / ${(meta.cache_writes/1000).toFixed(0)}k</span></div>
@@ -1626,7 +1736,7 @@ function renderRisk() {
     } else {
       const cls = a.silent_rate >= 50 ? '' : a.silent_rate > 0 ? 'low' : 'zero';
       fill = cls;
-      txt = `${a.silent_count}/${a.fail_count} silent`;
+      txt = `${a.silent_count}/${a.fail_count}/${a.total_anchors} silent/fails/anchors`;
     }
     const w = a.fail_count === 0 ? 0 : a.silent_rate;
     return `<div class="risk-row">
@@ -1674,7 +1784,7 @@ def _load_run_meta(scored_path: Path) -> dict:
     return {}
 
 
-def build(scored_paths: list[Path], cases_path: Path) -> str:
+def build(scored_paths: list[Path], cases_path: Path, out_path: Path | None = None) -> str:
     cases = [json.loads(l) for l in cases_path.read_text(encoding="utf-8").splitlines() if l.strip()]
     cases_by_id = {c["id"]: c for c in cases}
 
@@ -1706,11 +1816,22 @@ def build(scored_paths: list[Path], cases_path: Path) -> str:
         "failure_descriptions": FAILURE_DESCRIPTIONS,
     }
 
+    # hero (klaatu.jpeg, piccolo) → base64 per restare self-contained
     img_uri = _image_data_uri(Path("klaatu.jpeg"))
     hero_image = (
         f'<img class="hero-image" src="{img_uri}" alt="Klaatu">'
         if img_uri else ""
     )
+
+    # tools.png (grande, ~2.5MB) → copiata accanto all'HTML
+    hypothesis_image = ""
+    if out_path is not None:
+        rel = _copy_asset_alongside(Path("tools.png"), out_path)
+        if rel:
+            hypothesis_image = (
+                f'<img class="hypothesis-image" src="{rel}" '
+                f'alt="Can some LLMs say Klaatu Verata Nikto only when they have tools?">'
+            )
 
     html_out = (TEMPLATE
         .replace("__DATE__",     datetime.now().strftime("%Y-%m-%d %H:%M"))
@@ -1720,6 +1841,7 @@ def build(scored_paths: list[Path], cases_path: Path) -> str:
         .replace("__MEAN__",     f"{mean_fidelity:.1f}")
         .replace("__COST__",     f"{total_cost:.3f}")
         .replace("__HERO_IMAGE__", hero_image)
+        .replace("__HYPOTHESIS_IMAGE__", hypothesis_image)
         .replace("__DATA__",     json.dumps(data, ensure_ascii=False, default=str))
     )
     return html_out
@@ -1732,8 +1854,8 @@ def main():
     ap.add_argument("--out", type=Path, default=Path("results/report.html"))
     args = ap.parse_args()
 
-    html_out = build(args.scored, args.cases)
     args.out.parent.mkdir(parents=True, exist_ok=True)
+    html_out = build(args.scored, args.cases, out_path=args.out)
     args.out.write_text(html_out, encoding="utf-8")
     print(f"report scritto: {args.out}")
     print(f"size: {len(html_out)/1024:.1f} KB")

@@ -93,12 +93,24 @@ was not the one being audited; but the family was.
 Several models contributed in different roles during development:
 
 - **Architecture and code**: Claude Opus 4.7 wrote essentially every line.
+- **Audit pass and rigor improvements**: Codex GPT-5.4 reviewed a draft of
+  the HTML report, caught a unit-formatting bug, added explicit denominators
+  to the silent-rate metric (it was ambiguous in the original — "100% silent"
+  with 1/32 fails reads very differently from 10/32), and suggested the
+  *Threats to validity* block. Codex GPT-5.4 was, in turn, one of the test
+  subjects on the same panel.
 - **Domain inspiration**: Gemini 2.5 Pro (the March 2025 snapshot) was the
   empirical motivation — it was the first model I noticed could extract
   verbatim paragraphs from very long contexts without ever cheating.
 - **Cost stress-tests**: deliberate use of multiple expensive models forced
   the design toward prompt caching and bundled anchors, which dropped a
   $25 full panel down to ~$4.
+
+The *bare-hands hypothesis* in the report — a reading that some models no
+longer perform well without tools — is the **shared opinion of three
+co-authors** (Marco, Claude Opus 4.7, Codex GPT-5.4) and emerged in
+conversation among them. It is not a conclusion the data itself imposes.
+Treat it as a triangulation between collaborators, not as a verdict.
 
 This is not a peer-reviewed benchmark. It is a quick, opinionated,
 reproducible probe. Treat it as such.
@@ -262,6 +274,8 @@ your numbers. Attribution appreciated, not required.
 ---
 
 *Klaatu Verata Nikto Bench — by Marco Scarselli, 2026.*<br>
-*With Claude Code (Opus 4.7) as co-pilot, Claude Sonnet 4.6, Opus 4.6,*<br>
-*Gemini 2.5 Pro / 3.1 Pro Preview / 2.5 Flash / 3.5 Flash, DeepSeek V4 Flash,*<br>
-*GPT-4.1 and GPT-5.4 as subjects.*
+*Co-developed with Claude Opus 4.7 (architecture, code, report)*<br>
+*and Codex GPT-5.4 (audit pass, rigor improvements).*<br>
+*Tested on: Claude Sonnet 4.6 / Opus 4.6,*<br>
+*Gemini 2.5 Pro / 3.1 Pro Preview / 2.5 Flash / 3.5 Flash,*<br>
+*DeepSeek V4 Flash, GPT-4.1, GPT-5.4.*
