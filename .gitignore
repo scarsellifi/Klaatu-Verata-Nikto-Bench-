@@ -1,0 +1,87 @@
+# ── Secrets ──────────────────────────────────────────────
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+secrets/
+
+# ── Python ───────────────────────────────────────────────
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+*.egg
+*.egg-info/
+.eggs/
+build/
+dist/
+wheels/
+pip-wheel-metadata/
+.pytype/
+.pyre/
+.mypy_cache/
+.pytest_cache/
+.ruff_cache/
+.tox/
+.nox/
+htmlcov/
+.coverage
+.coverage.*
+coverage.xml
+*.cover
+.hypothesis/
+
+# ── Virtual environments ─────────────────────────────────
+.venv/
+venv/
+ENV/
+env/
+.python-version
+
+# ── Poetry / packaging ───────────────────────────────────
+# poetry.lock IS committed for reproducibility across re-runs.
+
+# ── Jupyter / notebooks ──────────────────────────────────
+.ipynb_checkpoints/
+*.ipynb_checkpoints
+
+# ── Editors / IDEs ───────────────────────────────────────
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+.netrwhist
+.project
+.pydevproject
+.settings/
+
+# ── OS junk ──────────────────────────────────────────────
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+desktop.ini
+
+# ── Project: outputs / artifacts ─────────────────────────
+results/
+data/texts/
+cases/*.jsonl
+*.log
+.claude/
+.aider*
+
+# ── Project: large model dumps & temp ────────────────────
+*.pkl
+*.parquet
+*.feather
+*.arrow
+*.tsv.gz
+*.jsonl.gz
+tmp/
+.tmp/
+scratch/

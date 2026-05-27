@@ -1,0 +1,25 @@
+[tool.poetry]
+name = "klaatu-verata-nikto-bench"
+version = "0.1.0"
+description = "Benchmark per modelli che sanno copiare senza inventare."
+authors = ["Marco Scarselli"]
+license = "MIT"
+readme = "README.md"
+packages = [{ include = "kvn", from = "src" }]
+
+[tool.poetry.dependencies]
+python = "^3.10"
+openai = "^1.50.0"
+rapidfuzz = "^3.9.0"
+python-dotenv = "^1.0.1"
+
+[tool.poetry.scripts]
+kvn-flatten = "kvn.flatten:main"
+kvn-run = "kvn.run:main"
+kvn-score = "kvn.score:main"
+kvn-report = "kvn.report:main"
+kvn-build-cases = "kvn.build_cases:main"
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
