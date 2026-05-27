@@ -18,8 +18,11 @@ context and instruction.
 
 ## Latest snapshot — 27 May 2026
 
-9 frontier models, 32 anchors each, on a real ~188k-token Italian PNRR
-knowledge bank. One bundled prompt per model. Temperature 0.
+9 frontier models, 32 anchors each, on a real ~188k-token corpus of
+**Italian public-sector "situational" competency-test questions** (297
+workplace scenarios, each with three answer variants — effective,
+mediocre, ineffective — and an evaluator's commentary). One bundled prompt
+per model. Temperature 0.
 
 | # | Model | Hard | Soft fidelity | Damage | Severity | Silent% | Cost |
 |---|---|---:|---:|---:|---:|---:|---:|
@@ -61,7 +64,7 @@ specifics matters.
 | Drift axis | Why it matters |
 |---|---|
 | **Model weights** | Closed models are silently updated. `claude-sonnet-4.6` today is not the same as `claude-sonnet-4.6` in three months. |
-| **Provider routing** | OpenRouter can shift a request between hardware/region/quantisation. Same model name, different latency, sometimes different output. |
+| **Provider routing** | OpenRouter can shift a request between hardware/region/quantisation, or between *third-party hosts* (Together, DeepInfra, Lambda, Fireworks, the official model API). Same model name, different latency, sometimes different output. **Latency in this benchmark is therefore not a clean model property** — it mixes model behavior with the operator that served the request. |
 | **System prompt drift** | Providers tweak hidden system prompts and safety layers. The same user prompt does not always yield the same output. |
 | **Decoding defaults** | Temperature 0 is not always actually deterministic. Some providers cache, batch, or sample at low temperatures. |
 | **Source language & register** | This run uses Italian bureaucratic prose. English novels, code, or formal legal text will give different rankings. |
@@ -70,7 +73,7 @@ specifics matters.
 ### What you should do, then
 
 1. **Run it again** with the exact same models a week, a month, six months later. Track drift per model over time.
-2. **Run it on your data.** The included PNRR quiz works as a stress test, but a real production task uses *your* documents. Swap in your own JSON; the build script (`kvn-build-cases`) will generate a fresh anchor bundle.
+2. **Run it on your data.** The included Italian situational-test corpus works as a stress test (formal bureaucratic prose with many lexically similar scenarios — a hard recall task by design), but a real production benchmark uses *your* documents. Swap in your own JSON; the build script (`kvn-build-cases`) will generate a fresh anchor bundle.
 3. **Run it more than once at temp 0.** Three runs back-to-back should be identical; if they aren't, you've measured the provider's nondeterminism, which is itself a finding.
 4. **Compare across documents.** Same anchors style, different domain. If a model only fails on burocratese, that's interesting.
 
@@ -258,7 +261,8 @@ You can re-run the entire panel for the price of a cappuccino.
 ## Status
 
 Experimental. Personal probe. The dataset is intentionally narrow (Italian
-bureaucratic prose); the method is intended to be portable.
+public-sector situational questions — formal, repetitive, lexically dense);
+the method is intended to be portable.
 
 If you run it on a different corpus, on a different day, with different
 models — open an issue with your numbers. A benchmark with one snapshot is

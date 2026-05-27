@@ -356,9 +356,11 @@ def compute_executive_summary(models: list[dict]) -> list[str]:
         nm = best["model"].split("/")[-1]
         portraits.append(
             f"<b>{nm} — the bargain that thinks.</b> "
-            f"It is slow (its reasoning loop is internal, not external), "
-            f"but it lands near the top of the leaderboard for a fraction of what "
-            f"the premium models charge."
+            f"It does its scaffolding internally rather than calling tools, "
+            f"and lands near the top of the leaderboard for a fraction of what "
+            f"the premium models charge. (Latency in this run mixes model "
+            f"behavior with the third-party provider that OpenRouter routed "
+            f"the request to — read it with caution.)"
         )
 
     # Per "stable / generational leap" raggruppa per LINEA (stesso stem
@@ -1287,8 +1289,11 @@ TEMPLATE = """<!doctype html>
 
   <section class="challenge">
     <div class="ch-kicker">The challenge, in plain language</div>
-    <p>Take a long document — in this run, a real Italian <b>PNRR knowledge
-    bank of 297 scenarios, ~188,000 tokens</b>. Hand it to a model. Ask it
+    <p>Take a long document — in this run, a real corpus of <b>Italian
+    public-sector "situational" exam questions</b>: 297 workplace
+    scenarios, each followed by three answer variants (effective, mediocre,
+    ineffective) and an evaluator's commentary, totalling ~188,000 tokens
+    of formal, repetitive bureaucratic Italian. Hand it to a model. Ask it
     to copy back specific passages <b>character by character</b>, with no
     shortcuts: no <code>grep</code>, no retrieval, no file access, no
     search tool. Just the model, the context, and the instruction.</p>
@@ -1370,6 +1375,7 @@ TEMPLATE = """<!doctype html>
       <li>Provider-side routing, hidden system prompts, and context caching can affect runs.</li>
       <li>Model snapshot drift can move rankings over time.</li>
       <li>Anchor placement and distribution across the document can amplify or mute depth effects.</li>
+      <li><b>Latency is not a clean model property in this setup.</b> OpenRouter may route the same model to different third-party providers (Together, DeepInfra, Lambda, Fireworks, the official API, etc.), each with different scheduling, hardware, batching, and queue depth. A "slow" reading here may reflect the provider, not the model.</li>
     </ul>
   </section>
 
