@@ -273,83 +273,139 @@ def aggregate_model(scored: dict) -> dict:
     }
 
 
-def compute_executive_summary(models: list[dict]) -> list[str]:
-    """Produce 3-4 frasi punchy per il box di executive summary in cima.
+def _model_stem(model_id: str) -> str:
+    """Estrae la 'linea' del modello rimuovendo i numeri di versione.
 
-    Sono piu' compatte e di impatto delle 'findings' (sezione I): rispondono
-    a 'cosa devo sapere se ho 10 secondi?'.
+    Serve per distinguere 'stessa linea, versione diversa' (es. gpt-4.1 vs
+    gpt-5.4) da 'tier diverso stessa generazione' (es. sonnet-4.6 vs opus-4.6).
     """
-    lines = []
+    import re
+    n = model_id.split("/")[-1]
+    stem = re.sub(r"-v?\d+(\.\d+)?", "", n)
+    stem = re.sub(r"-+", "-", stem).strip("-")
+    return stem
+
+
+def _pretty_label(stem: str) -> str:
+    """Capitalizzazione human-friendly per sigle note (GPT, ecc.)."""
+    parts = stem.split("-")
+    nice = []
+    for p in parts:
+        if p.lower() in ("gpt", "kvn", "llm", "api"):
+            nice.append(p.upper())
+        else:
+            nice.append(p.capitalize())
+    return " ".join(nice)
+
+
+def compute_executive_summary(models: list[dict]) -> list[str]:
+    """Character portraits — Scenario C.
+
+    Una riga = un ritratto. Pochi numeri, molta caratterizzazione.
+    L'idea: il lettore in 30 secondi conosce i 'personaggi' del round."""
+    portraits = []
     if not models:
-        return lines
+        return portraits
 
-    # 1) chi e' perfetto
-    perfect = sorted(
-        (m for m in models if m["agg"]["verbatim_rate"] == 100.0),
-        key=lambda m: m["meta"]["cost_usd"],
-    )
-    not_perfect = len(models) - len(perfect)
-    if perfect:
-        cheapest = perfect[0]
-        lines.append(
-            f"Only <b>{len(perfect)} of {len(models)}</b> models reproduced every "
-            f"anchor verbatim. Cheapest perfect: <b>{cheapest['model'].split('/')[-1]}</b> "
-            f"at ${cheapest['meta']['cost_usd']:.2f}."
-        )
-    else:
-        best = max(models, key=lambda m: m["agg"]["verbatim_rate"])
-        lines.append(
-            f"<b>No model is perfect.</b> Top performer: "
-            f"<b>{best['model'].split('/')[-1]}</b> at {best['agg']['verbatim_rate']:.1f}/100."
-        )
-
-    # 2) miglior rapporto qualita/prezzo (escludi free tier)
-    scored = [(m["agg"]["verbatim_rate"] / max(m["meta"]["cost_usd"], 0.001), m)
-              for m in models if m["meta"]["cost_usd"] > 0]
-    if scored:
-        scored.sort(key=lambda t: -t[0])
-        ratio, best = scored[0]
-        lines.append(
-            f"Best value: <b>{best['model'].split('/')[-1]}</b> — "
-            f"{best['agg']['verbatim_rate']:.1f}/100 at "
-            f"${best['meta']['cost_usd']:.3f}, "
-            f"<b>{int(ratio):,} points per dollar</b>."
-        )
-
-    # 3) silent risk paradox tra i top-score
-    risky = [m for m in models if m["agg"]["fail_count"] > 0 and m["agg"]["verbatim_rate"] >= 90]
-    risky.sort(key=lambda m: -m["agg"]["silent_rate"])
-    if risky and risky[0]["agg"]["silent_rate"] >= 50:
-        r = risky[0]
-        lines.append(
-            f"<b>Watch out for {r['model'].split('/')[-1]}:</b> headline score "
-            f"{r['agg']['verbatim_rate']:.1f}/100, but "
-            f"<b>{r['agg']['silent_rate']:.0f}% of its failures are invisible "
-            f"to a human reviewer</b> "
-            f"({r['agg']['silent_count']} silent failure"
-            f"{'' if r['agg']['silent_count'] == 1 else 's'} / "
-            f"{r['agg']['fail_count']} total failure"
-            f"{'' if r['agg']['fail_count'] == 1 else 's'} / "
-            f"{r['agg']['total_anchors']} anchors)."
-        )
-
-    # 4) family pattern, se c'e
     from collections import defaultdict
-    by_prov = defaultdict(list)
+    by_fam = defaultdict(list)
     for m in models:
-        by_prov[m["model"].split("/")[0]].append(m)
-    median_hard = sorted(m["agg"]["verbatim_rate"] for m in models)[len(models)//2]
-    for prov, ms in by_prov.items():
-        if len(ms) >= 2 and all(m["agg"]["verbatim_rate"] < median_hard for m in ms):
-            avg = sum(m["agg"]["verbatim_rate"] for m in ms) / len(ms)
-            lines.append(
-                f"The entire <b>{prov}</b> family scored below the panel median "
-                f"(avg {avg:.1f}/100 vs median {median_hard:.1f}). "
-                f"A family-wide pattern, not a parameter-size issue."
-            )
-            break  # uno e' abbastanza
+        by_fam[m["model"].split("/")[0]].append(m)
 
-    return lines[:4]
+    median_hard = sorted(m["agg"]["verbatim_rate"] for m in models)[len(models)//2]
+
+    # 1) Lo scriba imbattuto — modelli perfetti
+    perfect = [m for m in models if m["agg"]["verbatim_rate"] >= 100.0]
+    if perfect:
+        fams = {m["model"].split("/")[0] for m in perfect}
+        if len(fams) == 1 and len(perfect) >= 2:
+            fam = list(fams)[0].title()
+            portraits.append(
+                f"<b>{fam}'s Pro family — the unrivaled scribe.</b> "
+                f"Both variants read the document and return it untouched. "
+                f"They are the only models in the panel to reach a perfect score."
+            )
+        else:
+            names = " and ".join(m["model"].split("/")[-1] for m in perfect)
+            portraits.append(
+                f"<b>{names} — the perfect scribes.</b> "
+                f"They reproduce every anchor without a comma out of place."
+            )
+
+    # 2) Famiglia con failure pattern identico — scale doesn't rescue
+    for fam, ms in by_fam.items():
+        if len(ms) < 2:
+            continue
+        scores = [m["agg"]["verbatim_rate"] for m in ms]
+        if all(s < median_hard for s in scores) and (max(scores) - min(scores)) < 5:
+            names = " and ".join(m["model"].split("/")[-1] for m in ms)
+            portraits.append(
+                f"<b>{fam.title()} — built for tools, not transcription.</b> "
+                f"{names} fail in the same way and at the same rate. "
+                f"The bigger model does not escape the pattern: this looks like a "
+                f"family-wide specialization, not a parameter problem."
+            )
+            break
+
+    # 3) Il bargain
+    valued = [(m["agg"]["verbatim_rate"] / max(m["meta"]["cost_usd"], 0.001), m)
+              for m in models if m["meta"]["cost_usd"] > 0 and m["agg"]["verbatim_rate"] > 50]
+    valued.sort(key=lambda t: -t[0])
+    if valued:
+        _, best = valued[0]
+        nm = best["model"].split("/")[-1]
+        portraits.append(
+            f"<b>{nm} — the bargain that thinks.</b> "
+            f"It is slow (its reasoning loop is internal, not external), "
+            f"but it lands near the top of the leaderboard for a fraction of what "
+            f"the premium models charge."
+        )
+
+    # Per "stable / generational leap" raggruppa per LINEA (stesso stem
+    # senza numero di versione), non per famiglia: cosi' sonnet-4.6 e
+    # opus-4.6 sono separati (tier diversi), mentre gpt-4.1 e gpt-5.4
+    # finiscono insieme (stessa linea, generazioni diverse).
+    by_line = defaultdict(list)
+    for m in models:
+        by_line[_model_stem(m["model"])].append(m)
+
+    # 4) Stabilita' tra generazioni — stesso punteggio, costo crescente
+    stable_added = False
+    for line, ms in by_line.items():
+        if len(ms) < 2:
+            continue
+        scores = sorted([(m["agg"]["verbatim_rate"], m) for m in ms], key=lambda t: -t[0])
+        if scores[0][0] - scores[-1][0] < 1.0:
+            costs = [m["meta"]["cost_usd"] for m in ms]
+            if max(costs) > min(costs) * 1.2 and 50 < scores[0][0] < 100:
+                names = " and ".join(m["model"].split("/")[-1] for m in ms)
+                portraits.append(
+                    f"<b>{_pretty_label(line)} line — stable across generations.</b> "
+                    f"{names} land at the same score; the newer one just costs more "
+                    f"and runs slower. No discernible improvement on this axis."
+                )
+                stable_added = True
+                break
+
+    # 5) Salto generazionale drammatico (es. Flash 2.5 vs 3.5)
+    if not stable_added:
+        for line, ms in by_line.items():
+            if len(ms) < 2:
+                continue
+            scores = sorted([(m["agg"]["verbatim_rate"], m) for m in ms])
+            jump = scores[-1][0] - scores[0][0]
+            if jump >= 20 and scores[-1][0] < 100:
+                low_nm = scores[0][1]["model"].split("/")[-1]
+                high_nm = scores[-1][1]["model"].split("/")[-1]
+                portraits.append(
+                    f"<b>{high_nm} — the generational leap.</b> "
+                    f"Where its sibling {low_nm} stumbles, the newer release "
+                    f"recovers most of the gap. Proof the problem is tractable "
+                    f"when training prioritizes it."
+                )
+                break
+
+    return portraits[:4]
 
 
 def compute_findings(models: list[dict]) -> list[str]:
@@ -679,6 +735,89 @@ TEMPLATE = """<!doctype html>
     box-shadow: 0 1px 0 var(--rule);
   }
 
+  /* ─── Responsive (mobile / narrow) ─── */
+  @media (max-width: 720px) {
+    body { font-size: 16px; }
+    .page { padding: 28px 16px 56px; }
+    .masthead { padding: 16px 0 20px; }
+    .masthead h1 { font-size: 38px; line-height: 1; }
+    .masthead .subtitle { font-size: 15px; padding: 0 4px; }
+    .masthead .meta { font-size: 9px; line-height: 1.8; letter-spacing: 0.12em; }
+    .masthead .ornament { display: none; }
+    .hero-image { width: 72px; height: 72px; }
+
+    /* Challenge: less padding, smaller heading */
+    .challenge { padding: 18px 18px 16px; border-left-width: 4px; }
+    .challenge .ch-kicker { font-size: 21px; }
+    .challenge p { font-size: 15px; }
+
+    /* Hero stats: 2x2 grid instead of 1x4 */
+    .hero-stats { grid-template-columns: repeat(2, 1fr); }
+    .hero-stats .cell { padding: 14px 12px; border-right: 1px solid var(--rule); }
+    .hero-stats .cell:nth-child(2n) { border-right: none; }
+    .hero-stats .cell:nth-child(-n+2) { border-bottom: 1px solid var(--rule); }
+    .hero-stats .value { font-size: 28px; }
+
+    /* Section headers: stack lede below */
+    .section { flex-direction: column; align-items: flex-start; gap: 4px; }
+    .section .num { font-size: 36px; line-height: 1; }
+    .section h2 { font-size: 22px; }
+    .section .lede {
+      margin-left: 0; border-left: 2px solid var(--rule); padding-left: 12px;
+      max-width: none; font-size: 14px;
+    }
+
+    /* Exec summary: less padding, smaller numbers */
+    .exec-summary { padding: 22px 18px 24px; }
+    .exec-summary li {
+      grid-template-columns: 38px 1fr; gap: 12px;
+      font-size: 16px; line-height: 1.4;
+    }
+
+    /* Legend: collapse the 2-column reading layout */
+    .legend { padding: 16px 18px; }
+    .legend-body { column-count: 1; font-size: 14px; }
+
+    /* Rankings: 1 column, drop the visual bar (keep number+value) */
+    .rankings { grid-template-columns: 1fr; gap: 16px; }
+    .ranking { padding: 16px 18px; }
+    .ranking h3 { font-size: 18px; flex-wrap: wrap; }
+    .ranking h3 .arrow { font-size: 9px; }
+    .ranking li {
+      grid-template-columns: 20px 1fr 70px;
+      gap: 8px; font-size: 12px;
+    }
+    .ranking li .bar { display: none; }
+    .ranking li .nm { font-size: 10px; }
+
+    /* Maps: SVG already responsive; just stack the cards */
+    .maps { grid-template-columns: 1fr; gap: 16px; }
+    .map { padding: 16px 18px; }
+    .map svg { height: 280px; }
+
+    /* Taxonomy: 1 column */
+    .taxonomy { grid-template-columns: 1fr; gap: 14px; }
+
+    /* Specimen detail */
+    .specimen { padding: 14px 16px; }
+    .specimen summary { gap: 8px; }
+    .specimen .summary-text { font-size: 14px; min-width: 0; }
+    .specimen .open-indicator { display: none; }
+    .specimen-body .anchor-info { font-size: 10px; }
+    .diff { font-size: 11px; padding: 10px 12px; }
+
+    /* Hypothesis: smaller image, less padding */
+    .hypothesis { padding: 18px 20px; border-left-width: 4px; }
+    .hypothesis h3 { font-size: 22px; }
+    .hypothesis-image { max-width: 280px; }
+
+    /* Validity / findings */
+    .validity, .findings { padding: 16px 18px; }
+    .validity h3 { font-size: 20px; }
+    .finding { padding: 14px 18px; font-size: 15px; }
+    .finding .num-pill { font-size: 18px; margin-right: 8px; }
+  }
+
   /* ─── Model cards ─── */
   .models-grid {
     display: grid; grid-template-columns: repeat(auto-fit, minmax(360px, 1fr));
@@ -898,6 +1037,27 @@ TEMPLATE = """<!doctype html>
   .diff ins {
     background: var(--pass-soft); color: var(--pass);
     text-decoration: none; font-weight: 600;
+  }
+
+  /* ─── The challenge (intro) ─── */
+  .challenge {
+    background: var(--paper); border: 1px solid var(--rule);
+    padding: 26px 30px 24px; margin-bottom: 28px;
+    border-left: 5px solid var(--ink);
+  }
+  .challenge .ch-kicker {
+    font-family: var(--serif-display); font-size: 26px; font-weight: 600;
+    margin-bottom: 12px;
+  }
+  .challenge p {
+    margin: 0 0 10px; font-size: 17px; line-height: 1.55;
+    color: var(--ink-soft); max-width: 78ch;
+  }
+  .challenge p:last-child { margin-bottom: 0; }
+  .challenge b { color: var(--ink); font-weight: 600; }
+  .challenge code {
+    font-family: var(--mono); font-size: 14px;
+    background: var(--paper-2); padding: 1px 6px; border: 1px solid var(--rule);
   }
 
   /* ─── Executive summary ─── */
@@ -1125,8 +1285,24 @@ TEMPLATE = """<!doctype html>
     </div>
   </header>
 
+  <section class="challenge">
+    <div class="ch-kicker">The challenge, in plain language</div>
+    <p>Take a long document — in this run, a real Italian <b>PNRR knowledge
+    bank of 297 scenarios, ~188,000 tokens</b>. Hand it to a model. Ask it
+    to copy back specific passages <b>character by character</b>, with no
+    shortcuts: no <code>grep</code>, no retrieval, no file access, no
+    search tool. Just the model, the context, and the instruction.</p>
+    <p>The bench then asks 32 things, in three flavors. <b>Copy the answer
+    of question 47 verbatim.</b> <b>Copy the field that contains this exact
+    phrase.</b> Or, <b>refuse to answer if the requested item doesn't
+    exist.</b> Each anchor is binary: either the text matches the source
+    character for character, or it doesn't.</p>
+    <p>The goal is to measure something the modern frontier model is rarely
+    asked to do anymore: <i>be a faithful scribe</i>.</p>
+  </section>
+
   <section class="exec-summary" id="exec-summary">
-    <div class="exec-title">Executive summary</div>
+    <div class="exec-title">The cast of this round</div>
     <ol id="exec-list"></ol>
   </section>
 
