@@ -547,12 +547,12 @@ TEMPLATE = """<!doctype html>
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Klaatu Verata Nikto — A Literal Extraction Audit</title>
+<title>Klaatu Verata Nikto Benchmark — A Literal Extraction Audit of Frontier LLMs</title>
 <meta name="description" content="A benchmark for LLMs that copy without inventing. One task — verbatim extraction from a long document — measured across 9 frontier models, with auto-derived findings and per-failure char-level diffs.">
 
 <!-- Open Graph / Facebook / LinkedIn -->
 <meta property="og:type" content="article">
-<meta property="og:title" content="Klaatu Verata Nikto — A Literal Extraction Audit">
+<meta property="og:title" content="Klaatu Verata Nikto Benchmark — A Literal Extraction Audit of Frontier LLMs">
 <meta property="og:description" content="Can frontier LLMs still copy a passage verbatim from a long document, with no tools? A benchmark across 9 models. Auto-derived findings, char-level diffs.">
 <meta property="og:image" content="__SITE_URL__/tools.png">
 <meta property="og:url" content="__SITE_URL__/">
@@ -560,7 +560,7 @@ TEMPLATE = """<!doctype html>
 
 <!-- Twitter / X -->
 <meta name="twitter:card" content="summary_large_image">
-<meta name="twitter:title" content="Klaatu Verata Nikto — A Literal Extraction Audit">
+<meta name="twitter:title" content="Klaatu Verata Nikto Benchmark — A Literal Extraction Audit of Frontier LLMs">
 <meta name="twitter:description" content="A benchmark for LLMs that copy without inventing. 9 frontier models, one long document, no tools.">
 <meta name="twitter:image" content="__SITE_URL__/tools.png">
 
@@ -1297,7 +1297,7 @@ TEMPLATE = """<!doctype html>
     __HERO_IMAGE__
     <div class="kicker">Issue __NMODELS__ · __DATE__ · by Marco Scarselli</div>
     <h1>Klaatu Verata Nikto</h1>
-    <div class="subtitle">A literal extraction audit of the modern frontier model</div>
+    <div class="subtitle">A benchmark for LLMs that copy without inventing</div>
     <div class="meta">
       <span class="ornament">✦</span>
       <b>__NMODELS__</b> models &nbsp;·&nbsp;
