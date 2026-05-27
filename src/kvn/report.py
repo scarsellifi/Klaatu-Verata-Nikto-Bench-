@@ -521,6 +521,11 @@ def aggregate_run_meta(scored_raw: dict) -> dict:
 # HTML
 # ---------------------------------------------------------------------------
 
+# URL pubblico del report (per Open Graph / Twitter Card).
+# Override via flag --site-url quando si forka.
+DEFAULT_SITE_URL = "https://scarsellifi.github.io/Klaatu-Verata-Nikto-Bench-"
+
+
 METRICS_SPEC = [
     {"key":"hard",     "label":"Hard score",      "unit":"/100", "higher_better":True,  "fmt":".1f", "field":"verbatim_rate", "src":"agg",
      "lede":"Strict verbatim rate. Pass = exact match, character by character."},
@@ -543,6 +548,22 @@ TEMPLATE = """<!doctype html>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Klaatu Verata Nikto — A Literal Extraction Audit</title>
+<meta name="description" content="A benchmark for LLMs that copy without inventing. One task — verbatim extraction from a long document — measured across 9 frontier models, with auto-derived findings and per-failure char-level diffs.">
+
+<!-- Open Graph / Facebook / LinkedIn -->
+<meta property="og:type" content="article">
+<meta property="og:title" content="Klaatu Verata Nikto — A Literal Extraction Audit">
+<meta property="og:description" content="Can frontier LLMs still copy a passage verbatim from a long document, with no tools? A benchmark across 9 models. Auto-derived findings, char-level diffs.">
+<meta property="og:image" content="__SITE_URL__/tools.png">
+<meta property="og:url" content="__SITE_URL__/">
+<meta property="og:site_name" content="Klaatu Verata Nikto Bench">
+
+<!-- Twitter / X -->
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="Klaatu Verata Nikto — A Literal Extraction Audit">
+<meta name="twitter:description" content="A benchmark for LLMs that copy without inventing. 9 frontier models, one long document, no tools.">
+<meta name="twitter:image" content="__SITE_URL__/tools.png">
+
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,500;0,600;0,700;1,400&family=EB+Garamond:ital,wght@0,400;0,500;0,600;1,400&family=JetBrains+Mono:wght@400;500;700&display=swap">
@@ -1966,7 +1987,8 @@ def _load_run_meta(scored_path: Path) -> dict:
     return {}
 
 
-def build(scored_paths: list[Path], cases_path: Path, out_path: Path | None = None) -> str:
+def build(scored_paths: list[Path], cases_path: Path, out_path: Path | None = None,
+          site_url: str = DEFAULT_SITE_URL) -> str:
     cases = [json.loads(l) for l in cases_path.read_text(encoding="utf-8").splitlines() if l.strip()]
     cases_by_id = {c["id"]: c for c in cases}
 
@@ -2024,6 +2046,7 @@ def build(scored_paths: list[Path], cases_path: Path, out_path: Path | None = No
         .replace("__COST__",     f"{total_cost:.3f}")
         .replace("__HERO_IMAGE__", hero_image)
         .replace("__HYPOTHESIS_IMAGE__", hypothesis_image)
+        .replace("__SITE_URL__",  site_url.rstrip("/"))
         .replace("__DATA__",     json.dumps(data, ensure_ascii=False, default=str))
     )
     return html_out
@@ -2034,10 +2057,14 @@ def main():
     ap.add_argument("scored", nargs="+", type=Path)
     ap.add_argument("--cases", type=Path, required=True)
     ap.add_argument("--out", type=Path, default=Path("results/report.html"))
+    ap.add_argument("--site-url", default=DEFAULT_SITE_URL,
+                    help="Absolute URL where the report is published "
+                         "(used for Open Graph / Twitter Card metadata).")
     args = ap.parse_args()
 
     args.out.parent.mkdir(parents=True, exist_ok=True)
-    html_out = build(args.scored, args.cases, out_path=args.out)
+    html_out = build(args.scored, args.cases, out_path=args.out,
+                     site_url=args.site_url)
     args.out.write_text(html_out, encoding="utf-8")
     print(f"report scritto: {args.out}")
     print(f"size: {len(html_out)/1024:.1f} KB")
