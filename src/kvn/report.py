@@ -371,41 +371,41 @@ def compute_executive_summary(models: list[dict]) -> list[str]:
     for m in models:
         by_line[_model_stem(m["model"])].append(m)
 
-    # 4) Stabilita' tra generazioni — stesso punteggio, costo crescente
-    stable_added = False
+    # 4) Salto generazionale drammatico (es. Flash 2.5 vs 3.5, Opus 4.6 vs 4.8)
+    leap_added = False
     for line, ms in by_line.items():
         if len(ms) < 2:
             continue
-        scores = sorted([(m["agg"]["verbatim_rate"], m) for m in ms], key=lambda t: -t[0])
-        if scores[0][0] - scores[-1][0] < 1.0:
-            costs = [m["meta"]["cost_usd"] for m in ms]
-            if max(costs) > min(costs) * 1.2 and 50 < scores[0][0] < 100:
-                names = " and ".join(m["model"].split("/")[-1] for m in ms)
-                portraits.append(
-                    f"<b>{_pretty_label(line)} line — stable across generations.</b> "
-                    f"{names} land at the same score; the newer one just costs more "
-                    f"and runs slower. No discernible improvement on this axis."
-                )
-                stable_added = True
-                break
+        scores = sorted([(m["agg"]["verbatim_rate"], m) for m in ms], key=lambda t: t[0])
+        jump = scores[-1][0] - scores[0][0]
+        if jump >= 30:
+            low_nm = scores[0][1]["model"].split("/")[-1]
+            high_nm = scores[-1][1]["model"].split("/")[-1]
+            portraits.append(
+                f"<b>{high_nm} — the generational reversal.</b> "
+                f"Where its predecessor {low_nm} stumbles, the newer release "
+                f"closes the gap completely. Same line, radically different "
+                f"behavior on literal extraction."
+            )
+            leap_added = True
+            break
 
-    # 5) Salto generazionale drammatico (es. Flash 2.5 vs 3.5)
-    if not stable_added:
+    # 5) Stabilita' tra generazioni — stesso punteggio, costo crescente
+    if not leap_added:
         for line, ms in by_line.items():
             if len(ms) < 2:
                 continue
-            scores = sorted([(m["agg"]["verbatim_rate"], m) for m in ms])
-            jump = scores[-1][0] - scores[0][0]
-            if jump >= 20 and scores[-1][0] < 100:
-                low_nm = scores[0][1]["model"].split("/")[-1]
-                high_nm = scores[-1][1]["model"].split("/")[-1]
-                portraits.append(
-                    f"<b>{high_nm} — the generational leap.</b> "
-                    f"Where its sibling {low_nm} stumbles, the newer release "
-                    f"recovers most of the gap. Proof the problem is tractable "
-                    f"when training prioritizes it."
-                )
-                break
+            scores = sorted([(m["agg"]["verbatim_rate"], m) for m in ms], key=lambda t: -t[0])
+            if scores[0][0] - scores[-1][0] < 1.0:
+                costs = [m["meta"]["cost_usd"] for m in ms]
+                if max(costs) > min(costs) * 1.2 and 50 < scores[0][0] < 100:
+                    names = " and ".join(m["model"].split("/")[-1] for m in ms)
+                    portraits.append(
+                        f"<b>{_pretty_label(line)} line — stable across generations.</b> "
+                        f"{names} land at the same score; the newer one just costs more "
+                        f"and runs slower. No discernible improvement on this axis."
+                    )
+                    break
 
     return portraits[:4]
 
@@ -435,7 +435,10 @@ def compute_findings(models: list[dict]) -> list[str]:
     for score, ms in ties[:1]:
         names = ", ".join(m["model"].split("/")[-1] for m in ms)
         # spread interno su severity
-        sevs = sorted((m["agg"]["severity"], m["model"].split("/")[-1]) for m in ms)
+        sevs = sorted(
+            ((m["agg"]["severity"], m["model"].split("/")[-1]) for m in ms),
+            key=lambda t: t[0],
+        )
         if sevs[0][0] != sevs[-1][0]:
             findings.append(
                 f"<b>A {len(ms)}-way tie at {score:.1f} hides three personalities.</b> "
@@ -443,7 +446,31 @@ def compute_findings(models: list[dict]) -> list[str]:
                 f"{sevs[0][1]} ({sevs[0][0]} weighted), {sevs[-1][1]} ({sevs[-1][0]} weighted)."
             )
 
-    # 3) family pattern (provider)
+    # 3) salto generazionale dentro una stessa linea
+    by_line = defaultdict(list)
+    for m in models:
+        by_line[_model_stem(m["model"])].append(m)
+    leaps = []
+    for line, ms in by_line.items():
+        if len(ms) < 2:
+            continue
+        scores = sorted(
+            ((m["agg"]["verbatim_rate"], m) for m in ms),
+            key=lambda t: t[0],
+        )
+        jump = scores[-1][0] - scores[0][0]
+        if jump >= 30:
+            leaps.append((jump, line, scores[0], scores[-1]))
+    if leaps:
+        jump, line, low, high = max(leaps, key=lambda t: t[0])
+        findings.append(
+            f"<b>The {_pretty_label(line)} line is the sharpest reversal in the panel.</b> "
+            f"{low[1]['model'].split('/')[-1]} scored {low[0]:.1f}; "
+            f"{high[1]['model'].split('/')[-1]} reaches {high[0]:.1f}. "
+            f"That weakens any provider-wide claim and points to a model-generation shift instead."
+        )
+
+    # 4) family pattern (provider)
     by_prov = defaultdict(list)
     for m in models:
         prov = m["model"].split("/")[0]
@@ -457,7 +484,7 @@ def compute_findings(models: list[dict]) -> list[str]:
                 f"Not a parameter-size problem: it is a family-wide pattern."
             )
 
-    # 4) miglior rapporto qualita/prezzo
+    # 5) miglior rapporto qualita/prezzo
     scored = [(m["agg"]["verbatim_rate"] / max(m["meta"]["cost_usd"], 0.001), m) for m in models if m["meta"]["cost_usd"] > 0]
     scored.sort(key=lambda t: -t[0])
     if scored:
@@ -548,12 +575,12 @@ TEMPLATE = """<!doctype html>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Klaatu Verata Nikto Benchmark — A Literal Extraction Audit of Frontier LLMs</title>
-<meta name="description" content="A benchmark for LLMs that copy without inventing. One task — verbatim extraction from a long document — measured across 9 frontier models, with auto-derived findings and per-failure char-level diffs.">
+<meta name="description" content="A benchmark for LLMs that copy without inventing. One task — verbatim extraction from a long document — measured across __NMODELS__ models, with auto-derived findings and per-failure char-level diffs.">
 
 <!-- Open Graph / Facebook / LinkedIn -->
 <meta property="og:type" content="article">
 <meta property="og:title" content="Klaatu Verata Nikto Benchmark — A Literal Extraction Audit of Frontier LLMs">
-<meta property="og:description" content="Can frontier LLMs still copy a passage verbatim from a long document, with no tools? A benchmark across 9 models. Auto-derived findings, char-level diffs.">
+<meta property="og:description" content="Can frontier LLMs still copy a passage verbatim from a long document, with no tools? A benchmark across __NMODELS__ models. Auto-derived findings, char-level diffs.">
 <meta property="og:image" content="__SITE_URL__/tools.png">
 <meta property="og:url" content="__SITE_URL__/">
 <meta property="og:site_name" content="Klaatu Verata Nikto Bench">
@@ -561,7 +588,7 @@ TEMPLATE = """<!doctype html>
 <!-- Twitter / X -->
 <meta name="twitter:card" content="summary_large_image">
 <meta name="twitter:title" content="Klaatu Verata Nikto Benchmark — A Literal Extraction Audit of Frontier LLMs">
-<meta name="twitter:description" content="A benchmark for LLMs that copy without inventing. 9 frontier models, one long document, no tools.">
+<meta name="twitter:description" content="A benchmark for LLMs that copy without inventing. __NMODELS__ models, one long document, no tools.">
 <meta name="twitter:image" content="__SITE_URL__/tools.png">
 
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -1428,16 +1455,16 @@ TEMPLATE = """<!doctype html>
   <section id="findings" class="findings"></section>
 
   <aside class="hypothesis">
-    <div class="kicker">A three-voice interpretive note · not a benchmark conclusion</div>
+    <div class="kicker">A three-voice interpretive note · revised after Opus 4.8 · not a benchmark conclusion</div>
     <h3>The bare-hands hypothesis</h3>
     __HYPOTHESIS_IMAGE__
-    <p><b>One plausible reading of this benchmark is that some models no longer work well bare-handed.</b> KVN removes tools, retrieval, file access, and search, then asks for literal extraction from context alone. On that axis, the panel appears to split between models that still read and copy internally, and models that seem more comfortable when an external scaffold is available.</p>
+    <p><b>One plausible reading of this benchmark is that some models no longer work well bare-handed.</b> KVN removes tools, retrieval, file access, and search, then asks for literal extraction from context alone. On that axis, the panel still separates clean native recall from visible drift. But Opus 4.8 means the story is no longer a clean provider split.</p>
     <ul>
-      <li><b>Anthropic is the clearest signal:</b> Sonnet 4.6 and Opus 4.6 both land at 62.5/100. The larger model does not escape the failure profile, which is more consistent with specialization (heavy investment in agentic / tool-use training) than with raw scale limits.</li>
-      <li><b>Gemini Pro looks like the opposite design bet:</b> both Pro variants are flawless on this run, consistent with strong native long-context recall rather than tool-mediated recovery.</li>
-      <li><b>DeepSeek sits in the middle:</b> it is not effortless, but its scaffold appears internal rather than external. It thinks for a long time and still reaches 90.6/100 at very low cost.</li>
+      <li><b>Anthropic is now split, not uniform:</b> Sonnet 4.6 and Opus 4.6 both land at 62.5/100, while Opus 4.8 jumps to 100.0. That weakens any family-wide claim and suggests a generation-specific shift instead.</li>
+      <li><b>Gemini Pro still looks like the opposite design bet:</b> both Pro variants remain flawless on this run, consistent with strong native long-context recall rather than tool-mediated recovery.</li>
+      <li><b>DeepSeek still sits in the middle:</b> it is not effortless, but its scaffold appears internal rather than external. It thinks for a long time and still reaches 90.6/100 at very low cost.</li>
     </ul>
-    <p class="note"><b>Provenance.</b> This is an interpretation, not a finding. It emerged from a conversation between three voices: <b>Marco Scarselli</b> (the human), <b>Claude Opus 4.7</b> (the co-developer of the benchmark and the report), and <b>Codex GPT-5.4</b> (which independently audited a draft of this report and suggested several of the rigor improvements integrated above). All three were also test subjects, or members of the same families as the test subjects. <i>Treat this hypothesis as a triangulation between collaborators, not as a verdict of the data.</i></p>
+    <p class="note"><b>Provenance.</b> This is an interpretation, not a finding. It emerged from a conversation between three voices: <b>Marco Scarselli</b> (the human), <b>Claude Opus 4.7</b> (the co-developer of the benchmark and the report), and <b>Codex GPT-5.4</b> (which independently audited a draft of this report and suggested several of the rigor improvements integrated above). Opus 4.8 is now a direct counterexample to the strongest provider-level version of the claim. <i>Treat this hypothesis as a triangulation between collaborators, not as a verdict of the data.</i></p>
   </aside>
 
   <div class="section">

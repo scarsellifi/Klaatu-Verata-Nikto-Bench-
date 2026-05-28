@@ -16,9 +16,9 @@ context and instruction.
 
 ---
 
-## Latest snapshot — 27 May 2026
+## Latest snapshot — 28 May 2026
 
-9 frontier models, 32 anchors each, on a real ~188k-token corpus of
+10 selected models, 32 anchors each, on a real ~188k-token corpus of
 **Italian public-sector "situational" competency-test questions** (297
 workplace scenarios, each with three answer variants — effective,
 mediocre, ineffective — and an evaluator's commentary). One bundled prompt
@@ -28,21 +28,22 @@ per model. Temperature 0.
 |---|---|---:|---:|---:|---:|---:|---:|
 | 🥇 | `google/gemini-2.5-pro`         | **100.0** | 100.0 |    0 |  0 |  — | $0.31 |
 | 🥇 | `google/gemini-3.1-pro-preview` | **100.0** | 100.0 |    0 |  0 |  — | $0.49 |
-| 🥈 | `google/gemini-3.5-flash`       |  96.9 |  99.9 |    0 |  2 | **100%** | $0.41 |
-| 🥉 | `deepseek/deepseek-v4-flash`    |  90.6 |  96.8 |  476 | 21 |  33% | **$0.03** |
-| 🥉 | `openai/gpt-4.1`                |  90.6 |  96.7 |  468 | 21 |  33% | $0.39 |
-| 🥉 | `openai/gpt-5.4`                |  90.6 |  95.3 |  790 | 30 |   0% | $0.51 |
-|  7 | `google/gemini-2.5-flash`       |  68.8 |  85.8 | 2110 | 91 |  10% | $0.06 |
-|  8 | `anthropic/claude-sonnet-4.6`   |  62.5 |  87.4 | 1863 | 79 |  33% | $0.87 |
-|  8 | `anthropic/claude-opus-4.6`     |  62.5 |  84.9 | 1896 | 93 |  25% | $1.45 |
+| 🥇 | `anthropic/claude-opus-4.8`     | **100.0** | 100.0 |    0 |  0 |  — | $2.06 |
+|  4 | `google/gemini-3.5-flash`       |  96.9 |  99.9 |    0 |  2 | **100%** | $0.41 |
+|  5 | `deepseek/deepseek-v4-flash`    |  90.6 |  96.8 |  476 | 21 |  33% | **$0.03** |
+|  5 | `openai/gpt-4.1`                |  90.6 |  96.7 |  468 | 21 |  33% | $0.39 |
+|  5 | `openai/gpt-5.4`                |  90.6 |  95.3 |  790 | 30 |   0% | $0.51 |
+|  8 | `google/gemini-2.5-flash`       |  68.8 |  85.8 | 2110 | 91 |  10% | $0.06 |
+|  9 | `anthropic/claude-sonnet-4.6`   |  62.5 |  87.4 | 1863 | 79 |  33% | $0.87 |
+|  9 | `anthropic/claude-opus-4.6`     |  62.5 |  84.9 | 1896 | 93 |  25% | $1.45 |
 
 Five auto-derived findings from this run:
 
-1. **Only 2 of 9 models reproduce the document without error.** The flawless set: *gemini-2.5-pro* and *gemini-3.1-pro-preview*.
-2. **A 3-way tie at 90.6 hides three personalities.** *deepseek-v4-flash*, *gpt-4.1* and *gpt-5.4* agree on the headline number but disagree on severity (21 vs 30 weighted).
-3. **The anthropic family lags on this task.** Both Anthropic models score below the median (91). Not a parameter-size problem (Opus and Sonnet tie at 62.5): it is family-wide.
-4. **`deepseek-v4-flash` dominates on value.** Score 90.6 at $0.027 — *3,297 points per dollar*, orders of magnitude ahead of premium competitors.
-5. **The silent paradox of `gemini-3.5-flash`.** Hard score 96.9, but 100% of its rare failures are *invisible to a human reviewer* (dropped the closing sentence of a scenario). High score, hidden risk.
+1. **Only 3 of 10 models reproduce the document without error.** The flawless set: *gemini-2.5-pro*, *gemini-3.1-pro-preview*, and *claude-opus-4.8*.
+2. **The Claude Opus line is the sharpest reversal in the panel.** *claude-opus-4.6* scored 62.5; *claude-opus-4.8* reaches 100.0. That weakens any provider-wide claim and points to a model-generation shift instead.
+3. **A 3-way tie at 90.6 still hides three personalities.** *deepseek-v4-flash*, *gpt-4.1* and *gpt-5.4* agree on the headline number but disagree on severity (21 vs 30 weighted).
+4. **`deepseek-v4-flash` still dominates on value.** Score 90.6 at $0.027 — *3,297 points per dollar*, orders of magnitude ahead of premium competitors.
+5. **The silent paradox of `gemini-3.5-flash` remains.** Hard score 96.9, but 100% of its rare failures are *invisible to a human reviewer* (1 silent failure / 1 total failure / 32 anchors). High score, hidden risk.
 
 **Full HTML report** with executive summary, charts, char-level diffs and
 per-failure classification: [`docs/index.html`](docs/index.html) —
@@ -89,9 +90,12 @@ In honesty: **vibe-coded with Claude Code over a single afternoon.**
 The README, the runner, the scorer, the HTML report, the failure-mode
 taxonomy, the editorial styling — all developed in a live conversation with
 Anthropic's Claude Opus 4.7 (1M context). The benchmark itself then went on
-to evaluate, among others, `claude-sonnet-4.6` and `claude-opus-4.6` —
-which scored worst in the panel. The model that helped me build the audit
-was not the one being audited; but the family was.
+to evaluate, among others, `claude-sonnet-4.6`, `claude-opus-4.6`, and — one
+day later, on 28 May 2026 — `claude-opus-4.8`. The first Anthropic panel
+looked terrible; the next Opus release immediately overturned the provider-
+level story. The model that helped me build the audit was not the one being
+audited; but the family was, and the repo now preserves both the mistaken
+first impression and its correction.
 
 Several models contributed in different roles during development:
 
@@ -112,7 +116,10 @@ Several models contributed in different roles during development:
 The *bare-hands hypothesis* in the report — a reading that some models no
 longer perform well without tools — is the **shared opinion of three
 co-authors** (Marco, Claude Opus 4.7, Codex GPT-5.4) and emerged in
-conversation among them. It is not a conclusion the data itself imposes.
+conversation among them. `claude-opus-4.8` is now a direct counterexample to
+its strongest provider-level version, so the claim has to be read more
+narrowly: at most as a generation-specific or training-priority story, not
+as a permanent family trait. It is not a conclusion the data itself imposes.
 Treat it as a triangulation between collaborators, not as a verdict.
 
 This is not a peer-reviewed benchmark. It is a quick, opinionated,
@@ -239,12 +246,12 @@ klaatu-verata-nikto-bench/
 
 ## Cost reality
 
-Full 9-model panel on the 188k-token document, with caching on:
+Full 10-model panel on the 188k-token document, with caching on:
 
 | | Cost |
 |---|---:|
-| Gemini 2.5 Flash | $0.06 |
 | DeepSeek V4 Flash | $0.03 |
+| Gemini 2.5 Flash | $0.06 |
 | Gemini 2.5 Pro | $0.31 |
 | GPT-4.1 | $0.39 |
 | Gemini 3.5 Flash | $0.41 |
@@ -252,9 +259,10 @@ Full 9-model panel on the 188k-token document, with caching on:
 | GPT-5.4 | $0.51 |
 | Claude Sonnet 4.6 | $0.87 |
 | Claude Opus 4.6 | $1.45 |
-| **Total** | **~$4.50** |
+| Claude Opus 4.8 | $2.06 |
+| **Total** | **~$6.58** |
 
-You can re-run the entire panel for the price of a cappuccino.
+You can still re-run the entire panel for the price of lunch.
 
 ---
 
@@ -280,6 +288,6 @@ your numbers. Attribution appreciated, not required.
 *Klaatu Verata Nikto Bench — by Marco Scarselli, 2026.*<br>
 *Co-developed with Claude Opus 4.7 (architecture, code, report)*<br>
 *and Codex GPT-5.4 (audit pass, rigor improvements).*<br>
-*Tested on: Claude Sonnet 4.6 / Opus 4.6,*<br>
+*Tested on: Claude Sonnet 4.6 / Opus 4.6 / Opus 4.8,*<br>
 *Gemini 2.5 Pro / 3.1 Pro Preview / 2.5 Flash / 3.5 Flash,*<br>
 *DeepSeek V4 Flash, GPT-4.1, GPT-5.4.*
